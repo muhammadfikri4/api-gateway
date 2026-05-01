@@ -1,6 +1,10 @@
 package router
 
 import (
+	"net/http"
+	"os"
+	"strings"
+
 	"api-gateway/config"
 	"api-gateway/handler"
 	"api-gateway/middleware"
@@ -25,6 +29,9 @@ func SetupAPI(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	// Public routes
 	api := r.Group("/api")
 	{
+		api.GET("/health", func(c *gin.Context) {
+			c.JSON(http.StatusOK, gin.H{"success": true, "message": "ok"})
+		})
 		api.POST("/auth/login", authHandler.Login)
 		api.POST("/auth/register", authHandler.Register)
 		api.GET("/gateway/info", func(c *gin.Context) {
@@ -62,6 +69,22 @@ func SetupAPI(db *gorm.DB, cfg *config.Config) *gin.Engine {
 			services.PUT("/:id", serviceHandler.Update)
 			services.DELETE("/:id", serviceHandler.Delete)
 		}
+	}
+
+	// Serve frontend static files if dist directory exists
+	distPath := "./dist"
+	if _, err := os.Stat(distPath); err == nil {
+		r.Static("/assets", distPath+"/assets")
+		r.StaticFile("/favicon.svg", distPath+"/favicon.svg")
+
+		// SPA fallback: serve index.html for non-API routes
+		r.NoRoute(func(c *gin.Context) {
+			if strings.HasPrefix(c.Request.URL.Path, "/api/") {
+				c.JSON(http.StatusNotFound, gin.H{"success": false, "message": "API endpoint not found"})
+				return
+			}
+			c.File(distPath + "/index.html")
+		})
 	}
 
 	return r
